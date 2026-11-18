@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Cloud9 Flick Trainer — 60-Second Aim Trainer</title>
+<!--
+  Cloud9 Flick Trainer
+  A 60-second flick-shot / aim trainer mini-game.
+  Built for the Cloud9 x JetBrains "Sky's the Limit" Hackathon 2026 — Category 3 (Event Mini Game).
+  Single self-contained HTML5 file: no external dependencies, works offline.
+  All artwork is original (canvas-drawn). Not affiliated with Cloud9 or Riot Games.
+  Developed with JetBrains WebStorm, JetBrains Air and Junie.
+-->
+<style>
+  :root {
+    --c9-blue: #0091ff;
+    --c9-blue-dark: #0066cc;
+    --c9-sky: #4db2ff;
+    --bg: #0a1628;
+    --bg-panel: rgba(13, 30, 54, 0.92);
+    --text: #f2f7ff;
+    --muted: #9db4d0;
+    --gold: #ffc857;
+    --danger: #ff5d5d;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg); }
+  body {
+    font-family: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+    color: var(--text);
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  #game { position: fixed; inset: 0; display: block; cursor: crosshair; }
+
+  /* ---------- HUD (top bar during play) ---------- */
+  #hud {
+    position: fixed; top: 0; left: 0; right: 0;
+    display: none; justify-content: space-between; align-items: center;
+    padding: 14px 20px;
+    pointer-events: none;
+    font-weight: 700;
+    z-index: 5;
+  }
+  #hud .hud-box {
+    background: var(--bg-panel);
+    border: 1px solid rgba(0, 145, 255, 0.45);
+    border-radius: 10px;
+    padding: 8px 16px;
+    font-size: 20px;
+    letter-spacing: 0.5px;
+    min-width: 110px;
+    text-align: center;
+  }
+  #hud .hud-box small { display: block; font-size: 11px; color: var(--muted); letter-spacing: 2px; font-weight: 600; }
+  #hudTimer.warn { color: var(--danger); border-color: var(--danger); animation: pulse 0.5s infinite alternate; }
+  #hudCombo { color: var(--gold); }
+  @keyframes pulse { from { transform: scale(1); } to { transform: scale(1.06); } }
+
+  /* ---------- Overlay screens ---------- */
+  .screen {
+    position: fixed; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: radial-gradient(ellipse at center, rgba(10, 22, 40, 0.55) 0%, rgba(10, 22, 40, 0.88) 100%);
+    z-index: 10;
+    padding: 20px;
+    text-align: center;
+  }
+  .hidden { display: none !important; }
+  .logo { font-size: clamp(34px, 7vw, 64px); font-weight: 900; letter-spacing: 2px; line-height: 1.05; }
+  .logo .c9 { color: var(--c9-blue); }
+  .logo .flick { color: #fff; }
+  .tagline { margin-top: 10px; font-size: clamp(15px, 2.4vw, 20px); color: var(--muted); }
+  .tagline b { color: var(--c9-sky); }
+  .howto {
+    margin-top: 18px; font-size: clamp(14px, 2vw, 17px); line-height: 1.7; color: var(--text);
+    background: var(--bg-panel); border: 1px solid rgba(0, 145, 255, 0.35);
+    border-radius: 12px; padding: 14px 22px; max-width: 560px;
+  }
+  .howto .key { display: inline-block; background: var(--c9-blue); color: #fff; border-radius: 6px; padding: 1px 9px; font-weight: 800; font-size: 0.9em; }
+  .btn {
+    margin-top: 26px;
+    font-size: clamp(19px, 3vw, 24px); font-weight: 800; letter-spacing: 1px;
+    color: #fff; background: linear-gradient(180deg, var(--c9-blue), var(--c9-blue-dark));
+    border: none; border-radius: 14px; padding: 15px 52px; cursor: pointer;
+    box-shadow: 0 6px 24px rgba(0, 145, 255, 0.45);
+    transition: transform 0.08s ease, box-shadow 0.08s ease;
+  }
+  .btn:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(0, 145, 255, 0.6); }
+  .btn:active { transform: translateY(1px) scale(0.98); }
+  .btn.secondary {
+    background: transparent; border: 2px solid var(--c9-blue); color: var(--c9-sky);
+    box-shadow: none; font-size: 16px; padding: 10px 28px; margin-top: 14px;
+  }
+  .best-line { margin-top: 18px; font-size: 16px; color: var(--gold); font-weight: 700; }
+  .attract {
+    margin-top: 22px; font-size: 15px; color: var(--muted); letter-spacing: 3px;
+    animation: blink 1.4s infinite;
+  }
+  @keyframes blink { 0%, 100% { opacity: 0.25; } 50% { opacity: 1; } }
+
+  /* ---------- Leaderboard ---------- */
+  .board {
+    margin-top: 22px; width: min(420px, 92vw);
+    background: var(--bg-panel); border: 1px solid rgba(0, 145, 255, 0.35);
+    border-radius: 12px; padding: 12px 18px; text-align: left;
+  }
+  .board h3 { font-size: 13px; letter-spacing: 3px; color: var(--muted); margin-bottom: 8px; text-align: center; }
+  .board ol { list-style: none; }
+  .board li {
+    display: flex; justify-content: space-between;
+    font-size: 15px; padding: 4px 2px; border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .board li:last-child { border-bottom: none; }
+  .board li .rank { color: var(--c9-sky); font-weight: 800; width: 28px; }
+  .board li .name { flex: 1; font-weight: 700; letter-spacing: 1px; }
+  .board li .score { font-weight: 800; }
+  .board li.me { color: var(--gold); }
+  .board .empty { text-align: center; color: var(--muted); font-size: 14px; padding: 6px 0; }
+
+  /* ---------- End screen ---------- */
+  .final-score { font-size: clamp(52px, 10vw, 84px); font-weight: 900; color: #fff; line-height: 1; margin-top: 6px; }
+  .rank-badge {
+    margin-top: 10px; display: inline-block; font-size: 18px; font-weight: 800; letter-spacing: 2px;
+    color: #081120; background: var(--gold); border-radius: 999px; padding: 6px 20px;
+  }
+  .stats {
+    margin-top: 20px; display: flex; gap: 12px; flex-wrap: wrap; justify-content: center;
+  }
+  .stat {
+    background: var(--bg-panel); border: 1px solid rgba(0, 145, 255, 0.35);
+    border-radius: 12px; padding: 12px 18px; min-width: 120px;
+  }
+  .stat .v { font-size: 26px; font-weight: 900; }
+  .stat .k { font-size: 11px; letter-spacing: 2px; color: var(--muted); margin-top: 2px; }
+  .save-row { margin-top: 20px; display: flex; gap: 10px; align-items: center; justify-content: center; flex-wrap: wrap; }
+  .save-row label { font-size: 14px; color: var(--muted); letter-spacing: 1px; }
+  #initials {
+    width: 90px; text-align: center; font-size: 20px; font-weight: 800; letter-spacing: 4px;
+    text-transform: uppercase; color: var(--text);
+    background: rgba(255,255,255,0.08); border: 2px solid var(--c9-blue);
+    border-radius: 10px; padding: 8px 6px; outline: none;
+  }
+  #initials:focus { border-color: var(--c9-sky); }
+  .save-row .btn { margin-top: 0; font-size: 16px; padding: 10px 24px; }
+  .saved-note { margin-top: 10px; font-size: 14px; color: var(--gold); font-weight: 700; min-height: 20px; }
+
+  .foot { position: fixed; bottom: 12px; left: 0; right: 0; text-align: center; font-size: 12px; color: rgba(157, 180, 208, 0.7); z-index: 5; pointer-events: none; }
+  #muteBtn {
+    position: fixed; top: 14px; right: 16px; z-index: 20;
+    background: var(--bg-panel); color: var(--text); border: 1px solid rgba(0,145,255,0.45);
+    border-radius: 10px; padding: 8px 12px; font-size: 15px; cursor: pointer;
+  }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<!-- HUD during play -->
+<div id="hud">
+  <div class="hud-box" id="hudTimerBox"><small>TIME</small><span id="hudTimer">60</span></div>
+  <div class="hud-box" id="hudCombo"><small>COMBO</small><span id="hudComboVal">x1</span></div>
+  <div class="hud-box"><small>SCORE</small><span id="hudScore">0</span></div>
+</div>
+
+<!-- Start / attract screen -->
+<div id="startScreen" class="screen">
+  <div class="logo"><span class="c9">CLOUD9</span> <span class="flick">FLICK TRAINER</span></div>
+  <div class="tagline">60 seconds. <b>How fast are your flicks?</b></div>
+  <div class="howto">
+    Targets pop up — <span class="key">CLICK</span> them fast to score.<br>
+    Chain hits to build your <b>combo multiplier</b> (up to x5).<br>
+    A miss breaks the combo. Moving targets are worth <b>double</b>.
+  </div>
+  <button class="btn" id="startBtn">▶&nbsp; START</button>
+  <div class="best-line" id="bestLine"></div>
+  <div class="board" id="startBoard">
+    <h3>★ BOOTH LEADERBOARD — TOP 5 ★</h3>
+    <ol id="startBoardList"></ol>
+  </div>
+  <div class="attract" id="attractHint">TOUCH TO START — NO TUTORIAL NEEDED</div>
+</div>
+
+<!-- End screen -->
+<div id="endScreen" class="screen hidden">
+  <div class="logo" style="font-size: clamp(26px, 5vw, 40px);">TIME'S UP!</div>
+  <div class="final-score" id="finalScore">0</div>
+  <div class="rank-badge" id="rankBadge">ROOKIE</div>
+  <div class="stats">
+    <div class="stat"><div class="v" id="statAcc">0%</div><div class="k">ACCURACY</div></div>
+    <div class="stat"><div class="v" id="statFastest">—</div><div class="k">FASTEST FLICK</div></div>
+    <div class="stat"><div class="v" id="statCombo">x1</div><div class="k">BEST COMBO</div></div>
+    <div class="stat"><div class="v" id="statHits">0</div><div class="k">TARGETS HIT</div></div>
+  </div>
+  <div class="save-row">
+    <label for="initials">YOUR TAG</label>
+    <input id="initials" maxlength="3" value="YOU" autocomplete="off" spellcheck="false">
+    <button class="btn" id="saveBtn">SAVE SCORE</button>
+  </div>
+  <div class="saved-note" id="savedNote"></div>
+  <div class="board" id="endBoard">
+    <h3>★ BOOTH LEADERBOARD — TOP 5 ★</h3>
+    <ol id="endBoardList"></ol>
+  </div>
+  <button class="btn" id="againBtn">↻&nbsp; PLAY AGAIN</button>
+  <button class="btn secondary" id="menuBtn">BACK TO MENU</button>
+</div>
+
+<button id="muteBtn" title="Toggle sound">🔊 SOUND ON</button>
+<div class="foot">Built for Cloud9 x JetBrains “Sky's the Limit” Hackathon 2026 — Category 3 · All artwork original · Not affiliated with Cloud9 or Riot Games</div>
+
+<script>
+"use strict";
+/* =====================================================================
+   Cloud9 Flick Trainer — game logic
+   States: "start" (attract) -> "playing" -> "end"
+   Single rAF loop drives targets, HUD and the attract-mode background.
+   ===================================================================== */
+
+// ---------- Constants ----------
+var ROUND_MS = 60000;            // 60-second round
+var ATTRACT_IDLE_MS = 30000;     // back to attract visuals after 30s idle on menu
+var LB_KEY = "c9FlickTrainerLeaderboardV1";
+var MAX_TARGET_RADIUS = 46;      // px, start of round
+var MIN_TARGET_RADIUS = 24;      // px, end of round
+var SPAWN_START_MS = 700;        // spawn interval at t=0
+var SPAWN_END_MS = 380;          // spawn interval at t=60s
+var LIFE_START_MS = 1000;        // target lifetime at t=0
+var LIFE_END_MS = 620;           // target lifetime at t=60s
+var MOVING_AFTER_MS = 30000;     // moving targets appear in the second half
+var QUICK_MS = 300;              // "quick flick" bonus window
+var QUICK_BONUS = 50;
+var BASE_SCORE = 100;
+var MOVING_MULT = 2;             // moving targets worth double
+
+// ---------- DOM ----------
+var canvas = document.getElementById("game");
+var ctx = canvas.getContext("2d");
+var hud = document.getElementById("hud");
+var hudTimer = document.getElementById("hudTimer");
+var hudTimerBox = document.getElementById("hudTimerBox");
+var hudComboBox = document.getElementById("hudCombo");
+var hudScore = document.getElementById("hudScore");
+var hudComboVal = document.getElementById("hudComboVal");
+var startScreen = document.getElementById("startScreen");
+var endScreen = document.getElementById("endScreen");
+var startBtn = document.getElementById("startBtn");
+var againBtn = document.getElementById("againBtn");
+var menuBtn = document.getElementById("menuBtn");
+var saveBtn = document.getElementById("saveBtn");
+var initialsInput = document.getElementById("initials");
+var savedNote = document.getElementById("savedNote");
+var bestLine = document.getElementById("bestLine");
+var muteBtn = document.getElementById("muteBtn");
+
+// ---------- State ----------
+var state = "start";             // "start" | "playing" | "end"
+var W = 0, H = 0, DPR = 1;
+var targets = [];                // active targets on the field
+var decoys = [];                 // decorative drifting targets for attract mode
+var score = 0, combo = 0, bestCombo = 0;
+var hits = 0, shots = 0, fastestMs = Infinity;
+var roundStart = 0, lastSpawn = 0, lastFrame = 0;
+var lastActivity = Date.now();   // for attract-mode idle detection
+var attractOn = false;
+var soundOn = true;
+var savedThisRound = false;
+var lastEntryId = null;          // highlight the player's row after saving
+
+// ---------- Audio (tiny WebAudio blips, no assets) ----------
+var audioCtx = null;
+function beep(freq, dur, type, vol) {
+  if (!soundOn) return;
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === "suspended") audioCtx.resume();
+    var o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = type || "sine"; o.frequency.value = freq;
+    g.gain.setValueAtTime(vol || 0.12, audioCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start(); o.stop(audioCtx.currentTime + dur);
+  } catch (e) { /* audio is best-effort; game works without it */ }
+}
+muteBtn.addEventListener("click", function () {
+  soundOn = !soundOn;
+  muteBtn.textContent = soundOn ? "🔊 SOUND ON" : "🔇 SOUND OFF";
+});
+
+// ---------- Canvas sizing (DPR aware) ----------
+function resize() {
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = window.innerWidth; H = window.innerHeight;
+  canvas.width = Math.floor(W * DPR);
+  canvas.height = Math.floor(H * DPR);
+  canvas.style.width = W + "px";
+  canvas.style.height = H + "px";
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+window.addEventListener("resize", resize);
+resize();
+
+// ---------- Helpers ----------
+function rand(min, max) { return min + Math.random() * (max - min); }
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+function lerp(a, b, t) { return a + (b - a) * t; }
+function comboMultiplier() { return 1 + Math.min(Math.floor(combo / 4), 4); } // x1..x5
+function rankFor(s) {
+  if (s >= 6000) return "CLOUD9 MATERIAL";
+  if (s >= 4000) return "PROSPECT";
+  if (s >= 2500) return "CONTENDER";
+  if (s >= 1200) return "RISING STAR";
+  return "ROOKIE";
+}
+function fmtMs(ms) { return (ms === Infinity) ? "—" : Math.round(ms) + " ms"; }
+function todayStr() { // local date (not UTC) for the leaderboard
+  var d = new Date();
+  function p(n) { return String(n).padStart(2, "0"); }
+  return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate());
+}
+
+// ---------- Leaderboard (localStorage, offline-friendly) ----------
+function loadBoard() {
+  try {
+    var raw = localStorage.getItem(LB_KEY);
+    var arr = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr) ? arr : [];
+  } catch (e) { return []; }
+}
+function saveBoard(arr) {
+  try { localStorage.setItem(LB_KEY, JSON.stringify(arr.slice(0, 10))); } catch (e) { /* private mode etc. */ }
+}
+function renderBoard(listEl, highlightId) {
+  var board = loadBoard().slice(0, 5);
+  listEl.innerHTML = "";
+  if (board.length === 0) {
+    var li = document.createElement("li");
+    li.className = "empty";
+    li.textContent = "No scores yet — be the first on the board!";
+    listEl.appendChild(li);
+    return;
+  }
+  board.forEach(function (entry, i) {
+    var li = document.createElement("li");
+    if (entry.id === highlightId) li.className = "me";
+    var rank = document.createElement("span"); rank.className = "rank"; rank.textContent = (i + 1) + ".";
+    var name = document.createElement("span"); name.className = "name"; name.textContent = entry.name;
+    var sc = document.createElement("span"); sc.className = "score"; sc.textContent = entry.score.toLocaleString("en-US");
+    li.appendChild(rank); li.appendChild(name); li.appendChild(sc);
+    listEl.appendChild(li);
+  });
+}
+function refreshBoards() {
+  renderBoard(document.getElementById("startBoardList"), lastEntryId);
+  renderBoard(document.getElementById("endBoardList"), lastEntryId);
+  var best = loadBoard()[0];
+  bestLine.textContent = best ? ("🏆 Booth best: " + best.score.toLocaleString("en-US") + " by " + best.name) : "";
+}
+
+// ---------- Target spawning ----------
+// Difficulty ramps with elapsed round time: smaller targets, faster spawns,
+// shorter lifetimes; moving targets join in the second half.
+function progress() {
+  return clamp((performance.now() - roundStart) / ROUND_MS, 0, 1);
+}
+function spawnTarget() {
+  var p = progress();
+  var r = lerp(MAX_TARGET_RADIUS, MIN_TARGET_RADIUS, p);
+  var margin = r + 12;
+  var moving = (performance.now() - roundStart) > MOVING_AFTER_MS && Math.random() < 0.45;
+  var speed = moving ? rand(90, 190) : 0;      // px per second
+  var angle = rand(0, Math.PI * 2);
+  targets.push({
+    x: rand(margin, Math.max(margin + 1, W - margin)),
+    y: rand(margin + 70, Math.max(margin + 71, H - margin)), // keep clear of the HUD
+    r: r,
+    born: performance.now(),
+    life: lerp(LIFE_START_MS, LIFE_END_MS, p),
+    vx: Math.cos(angle) * speed,
+    vy: Math.sin(angle) * speed,
+    moving: moving,
+    hue: 205 + Math.floor(rand(-8, 8))          // Cloud9-blue family
+  });
+}
+
+// ---------- Game flow ----------
+function startRound() {
+  score = 0; combo = 0; bestCombo = 0;
+  hits = 0; shots = 0; fastestMs = Infinity;
+  targets = [];
+  savedThisRound = false;
+  lastEntryId = null;
+  savedNote.textContent = "";
+  initialsInput.value = "YOU";
+  saveBtn.disabled = false;
+  roundStart = performance.now();
+  lastSpawn = roundStart;
+  state = "playing";
+  startScreen.classList.add("hidden");
+  endScreen.classList.add("hidden");
+  hud.style.display = "flex";
+  hudTimerBox.classList.remove("warn");
+  updateHud();
+  beep(660, 0.12, "square", 0.08);
+}
+
+function endRound() {
+  state = "end";
+  targets = [];
+  hud.style.display = "none";
+  var acc = shots > 0 ? Math.round((hits / shots) * 100) : 0;
+  document.getElementById("finalScore").textContent = score.toLocaleString("en-US");
+  document.getElementById("rankBadge").textContent = rankFor(score);
+  document.getElementById("statAcc").textContent = acc + "%";
+  document.getElementById("statFastest").textContent = fmtMs(fastestMs);
+  document.getElementById("statCombo").textContent = "x" + Math.max(1, bestCombo > 0 ? comboMultiplierAt(bestCombo) : 1);
+  document.getElementById("statHits").textContent = hits;
+  refreshBoards();
+  endScreen.classList.remove("hidden");
+  beep(330, 0.25, "triangle", 0.12);
+  setTimeout(function () { beep(495, 0.3, "triangle", 0.12); }, 180);
+}
+// Combo multiplier as it was at a given combo count (for the stats display).
+function comboMultiplierAt(c) { return 1 + Math.min(Math.floor(c / 4), 4); }
+
+function backToMenu() {
+  state = "start";
+  targets = [];
+  endScreen.classList.add("hidden");
+  hud.style.display = "none";
+  startScreen.classList.remove("hidden");
+  lastActivity = Date.now();
+  attractOn = false;
+  refreshBoards();
+}
+
+function saveScore() {
+  if (savedThisRound) return;
+  var name = (initialsInput.value || "YOU").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 3) || "YOU";
+  var entry = {
+    id: "e" + Date.now(),
+    name: name,
+    score: score,
+    acc: shots > 0 ? Math.round((hits / shots) * 100) : 0,
+    date: todayStr()
+  };
+  var board = loadBoard();
+  board.push(entry);
+  board.sort(function (a, b) { return b.score - a.score; });
+  saveBoard(board);
+  lastEntryId = entry.id;
+  savedThisRound = true;
+  saveBtn.disabled = true;
+  var rank = board.findIndex(function (e) { return e.id === entry.id; }) + 1;
+  savedNote.textContent = rank > 0 && rank <= 10
+    ? ("Saved! You are #" + rank + " on the booth leaderboard.")
+    : "Saved to the booth leaderboard.";
+  refreshBoards();
+  beep(880, 0.15, "sine", 0.1);
+}
+
+// ---------- HUD ----------
+function updateHud() {
+  var remain = Math.max(0, Math.ceil((ROUND_MS - (performance.now() - roundStart)) / 1000));
+  hudTimer.textContent = remain;
+  hudTimerBox.classList.toggle("warn", remain <= 10);
+  hudScore.textContent = score.toLocaleString("en-US");
+  hudComboVal.textContent = "x" + comboMultiplier();
+  hudComboBox.style.color = combo >= 8 ? "var(--gold)" : "";
+}
+
+// ---------- Input ----------
+function onPointerDown(clientX, clientY) {
+  lastActivity = Date.now();
+  if (state !== "playing") return;
+  shots++;
+  // Topmost target first (last spawned = drawn last).
+  for (var i = targets.length - 1; i >= 0; i--) {
+    var t = targets[i];
+    var dx = clientX - t.x, dy = clientY - t.y;
+    if (dx * dx + dy * dy <= t.r * t.r) {
+      var reaction = performance.now() - t.born;
+      targets.splice(i, 1);
+      hits++;
+      combo++;
+      if (combo > bestCombo) bestCombo = combo;
+      if (reaction < fastestMs) fastestMs = reaction;
+      var gained = BASE_SCORE * comboMultiplier() * (t.moving ? MOVING_MULT : 1);
+      if (reaction <= QUICK_MS) gained += QUICK_BONUS;
+      score += gained;
+      spawnHitBurst(t.x, t.y, t.r);
+      beep(combo >= 8 ? 990 : 740, 0.09, "sine", 0.1);
+      updateHud();
+      return;
+    }
+  }
+  // Miss: combo resets.
+  if (combo > 0) beep(160, 0.12, "sawtooth", 0.06);
+  combo = 0;
+  updateHud();
+}
+canvas.addEventListener("pointerdown", function (e) {
+  e.preventDefault();
+  onPointerDown(e.clientX, e.clientY);
+});
+canvas.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+
+startBtn.addEventListener("click", function () { lastActivity = Date.now(); startRound(); });
+againBtn.addEventListener("click", function () { lastActivity = Date.now(); startRound(); });
+menuBtn.addEventListener("click", backToMenu);
+saveBtn.addEventListener("click", saveScore);
+initialsInput.addEventListener("keydown", function (e) { e.stopPropagation(); });
+document.addEventListener("keydown", function (e) {
+  lastActivity = Date.now();
+  if ((e.key === "Enter" || e.key === " ") && state === "start") { e.preventDefault(); startRound(); }
+  if ((e.key === "Enter" || e.key === "r" || e.key === "R") && state === "end") { e.preventDefault(); startRound(); }
+});
+// Any pointer activity on the start screen resets the attract idle timer.
+startScreen.addEventListener("pointerdown", function () { lastActivity = Date.now(); attractOn = false; });
+
+// ---------- Hit burst particles ----------
+var bursts = [];
+function spawnHitBurst(x, y, r) {
+  for (var i = 0; i < 10; i++) {
+    var a = rand(0, Math.PI * 2), sp = rand(60, 240);
+    bursts.push({ x: x, y: y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 0.45, max: 0.45, r: rand(2, 4) });
+  }
+}
+
+// ---------- Attract mode (idle menu background) ----------
+function spawnDecoy() {
+  var r = rand(18, 40);
+  decoys.push({
+    x: rand(r, Math.max(r + 1, W - r)),
+    y: rand(r, Math.max(r + 1, H - r)),
+    r: r,
+    vx: rand(-25, 25), vy: rand(-18, 18),
+    alpha: rand(0.12, 0.3)
+  });
+  if (decoys.length > 14) decoys.shift();
+}
+
+// ---------- Drawing ----------
+function drawTarget(t, now) {
+  var age = (now - t.born) / t.life;              // 0..1 over its life
+  var pulse = 1 + 0.06 * Math.sin(now / 90 + t.x);
+  var r = t.r * pulse * (1 - 0.25 * age);        // shrinks as it ages
+  // Outer glow ring
+  ctx.beginPath();
+  ctx.arc(t.x, t.y, r + 6, 0, Math.PI * 2);
+  ctx.fillStyle = "rgba(0, 145, 255, 0.12)";
+  ctx.fill();
+  // Body
+  ctx.beginPath();
+  ctx.arc(t.x, t.y, r, 0, Math.PI * 2);
+  ctx.fillStyle = "hsl(" + t.hue + ", 95%, 55%)";
+  ctx.fill();
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = "#ffffff";
+  ctx.stroke();
+  // Inner ring
+  ctx.beginPath();
+  ctx.arc(t.x, t.y, r * 0.55, 0, Math.PI * 2);
+  ctx.fillStyle = "rgba(255,255,255,0.85)";
+  ctx.fill();
+  // Bullseye
+  ctx.beginPath();
+  ctx.arc(t.x, t.y, r * 0.22, 0, Math.PI * 2);
+  ctx.fillStyle = "#0a1628";
+  ctx.fill();
+  // Lifetime ring (shrinks as the target expires)
+  ctx.beginPath();
+  ctx.arc(t.x, t.y, r + 2.5, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (1 - age));
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = "rgba(255, 200, 87, 0.9)";
+  ctx.stroke();
+  // Moving targets get a chevron marker
+  if (t.moving) {
+    ctx.beginPath();
+    ctx.arc(t.x, t.y, r + 11, 0, Math.PI * 2);
+    ctx.setLineDash([6, 6]);
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "rgba(255, 200, 87, 0.8)";
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+}
+
+function drawBackground(now) {
+  // Subtle vertical gradient + faint grid dots (booth-friendly, no assets).
+  var g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, "#0d1f38");
+  g.addColorStop(1, "#081120");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = "rgba(0, 145, 255, 0.07)";
+  var gap = 46;
+  for (var x = gap / 2; x < W; x += gap) {
+    for (var y = gap / 2; y < H; y += gap) {
+      ctx.fillRect(x, y, 2, 2);
+    }
+  }
+  // Slow drifting glow for the menu backdrop.
+  var gx = W * 0.5 + Math.sin(now / 2400) * W * 0.18;
+  var gy = H * 0.42 + Math.cos(now / 3100) * H * 0.1;
+  var rg = ctx.createRadialGradient(gx, gy, 0, gx, gy, Math.max(W, H) * 0.45);
+  rg.addColorStop(0, "rgba(0, 145, 255, 0.14)");
+  rg.addColorStop(1, "rgba(0, 145, 255, 0)");
+  ctx.fillStyle = rg;
+  ctx.fillRect(0, 0, W, H);
+}
+
+// ---------- Main loop ----------
+function frame(now) {
+  var dt = Math.min((now - lastFrame) / 1000, 0.05);
+  lastFrame = now;
+  drawBackground(now);
+
+  if (state === "start") {
+    // Attract mode: after 30s idle, float decorative targets in the background.
+    if (Date.now() - lastActivity > ATTRACT_IDLE_MS) attractOn = true;
+    if (attractOn && decoys.length < 10 && Math.random() < 0.02) spawnDecoy();
+    for (var d = decoys.length - 1; d >= 0; d--) {
+      var dc = decoys[d];
+      dc.x += dc.vx * dt; dc.y += dc.vy * dt;
+      if (dc.x < -50 || dc.x > W + 50 || dc.y < -50 || dc.y > H + 50) { decoys.splice(d, 1); continue; }
+      ctx.globalAlpha = dc.alpha;
+      ctx.beginPath(); ctx.arc(dc.x, dc.y, dc.r, 0, Math.PI * 2);
+      ctx.fillStyle = "#1e6fd9"; ctx.fill();
+      ctx.lineWidth = 2; ctx.strokeStyle = "#ffffff"; ctx.stroke();
+      ctx.beginPath(); ctx.arc(dc.x, dc.y, dc.r * 0.5, 0, Math.PI * 2);
+      ctx.fillStyle = "#ffffff"; ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  if (state === "playing") {
+    var elapsed = now - roundStart;
+    // Spawn pacing ramps up over the round.
+    var interval = lerp(SPAWN_START_MS, SPAWN_END_MS, progress());
+    if (now - lastSpawn >= interval) { spawnTarget(); lastSpawn = now; }
+    // Update + draw targets (expire old ones).
+    for (var i = targets.length - 1; i >= 0; i--) {
+      var t = targets[i];
+      if (t.moving) {
+        t.x += t.vx * dt; t.y += t.vy * dt;
+        if (t.x < t.r || t.x > W - t.r) t.vx *= -1;
+        if (t.y < t.r + 60 || t.y > H - t.r) t.vy *= -1;
+        t.x = clamp(t.x, t.r, W - t.r);
+        t.y = clamp(t.y, t.r + 60, H - t.r);
+      }
+      if (now - t.born > t.life) { targets.splice(i, 1); continue; } // expired = lost chance
+      drawTarget(t, now);
+    }
+    // Timer end.
+    if (elapsed >= ROUND_MS) { endRound(); }
+    else { updateHud(); }
+  }
+
+  // Hit-burst particles (all states).
+  for (var b = bursts.length - 1; b >= 0; b--) {
+    var p = bursts[b];
+    p.life -= dt;
+    if (p.life <= 0) { bursts.splice(b, 1); continue; }
+    p.x += p.vx * dt; p.y += p.vy * dt;
+    ctx.globalAlpha = p.life / p.max;
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+    ctx.fillStyle = "#ffc857"; ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
+  requestAnimationFrame(frame);
+}
+
+// ---------- Init ----------
+refreshBoards();
+requestAnimationFrame(function (now) { lastFrame = now; requestAnimationFrame(frame); });
+</script>
+</body>
+</html>
